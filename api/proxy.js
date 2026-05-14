@@ -1,13 +1,9 @@
 /**
  * Flip2PDF — Vercel Serverless Proxy
- * Routes: GET  /api/proxy?url=<encoded-url>
- *         HEAD /api/proxy?url=<encoded-url>
- *
- * Deploy: push to GitHub → import on vercel.com — done.
+ * GET/HEAD /api/proxy?url=<encoded-url>
  */
 
 export default async function handler(req, res) {
-  // CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -33,8 +29,8 @@ export default async function handler(req, res) {
     return;
   }
 
-  // SSRF guard — only http/https, block private IPs
   const parsed = new URL(targetUrl);
+
   if (!["http:", "https:"].includes(parsed.protocol)) {
     res.status(403).json({ error: "Protocol not allowed" });
     return;

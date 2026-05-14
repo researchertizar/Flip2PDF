@@ -5,12 +5,24 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Flip2PDF — Proxy Edition</title>
+  <meta name="description" content="Convert online flipbooks to downloadable PDF files">
+  <meta name="theme-color" content="#0e0d0b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Flip2PDF">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
     href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@300;400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap"
     rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
+    /* ══════════════════════════════════════════
+       RESET
+       ══════════════════════════════════════════ */
     *,
     *::before,
     *::after {
@@ -19,6 +31,9 @@
       padding: 0;
     }
 
+    /* ══════════════════════════════════════════
+       DESIGN TOKENS
+       ══════════════════════════════════════════ */
     :root {
       --ink: #0e0d0b;
       --ink2: #1a1917;
@@ -40,10 +55,15 @@
       --mono: 'IBM Plex Mono', monospace;
       --sans: 'IBM Plex Sans', sans-serif;
       --display: 'Bebas Neue', sans-serif;
+      --safe-b: env(safe-area-inset-bottom, 0px);
     }
 
+    /* ══════════════════════════════════════════
+       BASE
+       ══════════════════════════════════════════ */
     html {
       font-size: 16px;
+      -webkit-text-size-adjust: 100%;
     }
 
     body {
@@ -51,24 +71,24 @@
       background: var(--ink);
       color: var(--paper);
       min-height: 100vh;
+      min-height: 100dvh;
       overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
     }
 
-    /* SCANLINE OVERLAY */
+    /* ═══ SCANLINE OVERLAY ══ */
     body::before {
       content: '';
       position: fixed;
       inset: 0;
       background: repeating-linear-gradient(0deg,
-          transparent,
-          transparent 2px,
-          rgba(0, 0, 0, 0.03) 2px,
-          rgba(0, 0, 0, 0.03) 4px);
+          transparent, transparent 2px,
+          rgba(0, 0, 0, 0.03) 2px, rgba(0, 0, 0, 0.03) 4px);
       pointer-events: none;
       z-index: 1000;
     }
 
-    /* NOISE TEXTURE */
+    /* ═══ NOISE TEXTURE ══ */
     body::after {
       content: '';
       position: fixed;
@@ -81,16 +101,21 @@
       opacity: 0.6;
     }
 
-    /* LAYOUT */
+    /* ══════════════════════════════════════════
+       PAGE LAYOUT (desktop: sidebar + main grid)
+       ══════════════════════════════════════════ */
     .page {
       position: relative;
       z-index: 1;
       display: grid;
       grid-template-columns: 260px 1fr;
       min-height: 100vh;
+      min-height: 100dvh;
     }
 
-    /* SIDEBAR */
+    /* ══════════════════════════════════════════
+       SIDEBAR
+       ══════════════════════════════════════════ */
     .sidebar {
       border-right: 1px solid var(--rule);
       display: flex;
@@ -130,6 +155,7 @@
       text-transform: uppercase;
     }
 
+    /* ── SIDEBAR META ── */
     .sidebar-meta {
       padding: 24px 28px;
       border-bottom: 1px solid var(--rule);
@@ -144,6 +170,12 @@
       text-transform: uppercase;
       color: rgba(245, 240, 232, 0.25);
       margin-bottom: 10px;
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
     }
 
     .meta-val {
@@ -175,13 +207,7 @@
       color: rgba(245, 240, 232, 0.3);
     }
 
-    .meta-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
-    }
-
-    /* SIDEBAR LOG */
+    /* ── SIDEBAR LOG ── */
     .sidebar-log {
       flex: 1;
       overflow: hidden;
@@ -234,6 +260,7 @@
         opacity: 0;
         transform: translateX(-4px);
       }
+
       to {
         opacity: 1;
       }
@@ -260,7 +287,7 @@
       color: var(--blue);
     }
 
-    /* PROXY STATUS BADGE */
+    /* ── PROXY BADGE ── */
     .proxy-badge {
       padding: 16px 28px;
       border-top: 1px solid var(--rule);
@@ -287,8 +314,15 @@
     }
 
     @keyframes blink {
-      0%, 100% { opacity: 1 }
-      50% { opacity: 0.3 }
+
+      0%,
+      100% {
+        opacity: 1
+      }
+
+      50% {
+        opacity: 0.3
+      }
     }
 
     .proxy-url {
@@ -299,14 +333,17 @@
       font-style: italic;
     }
 
-    /* MAIN CONTENT */
+    /* ══════════════════════════════════════════
+       MAIN CONTENT
+       ══════════════════════════════════════════ */
     .main {
       display: flex;
       flex-direction: column;
       padding: 0;
+      min-width: 0;
     }
 
-    /* TOP BAR */
+    /* ── TOP BAR ── */
     .topbar {
       display: flex;
       align-items: center;
@@ -322,6 +359,17 @@
       gap: 16px;
     }
 
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 300;
+      color: rgba(245, 240, 232, 0.2);
+      letter-spacing: 0.08em;
+    }
+
     .step-pill {
       font-family: var(--mono);
       font-size: 10px;
@@ -332,6 +380,7 @@
       border: 1px solid var(--rule);
       color: rgba(245, 240, 232, 0.3);
       transition: all 0.3s;
+      white-space: nowrap;
     }
 
     .step-pill.active {
@@ -346,22 +395,43 @@
       background: var(--green-dim);
     }
 
-    .topbar-right {
+    /* install button */
+    .install-btn {
+      display: none;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border: 1px solid var(--rule);
+      border-radius: 2px;
+      background: transparent;
+      color: rgba(245, 240, 232, 0.3);
       font-family: var(--mono);
-      font-size: 10px;
-      font-weight: 300;
-      color: rgba(245, 240, 232, 0.2);
-      letter-spacing: 0.08em;
+      font-size: 9px;
+      font-weight: 400;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
     }
 
-    /* FORM AREA */
+    .install-btn:hover {
+      color: var(--gold);
+      border-color: var(--gold-border);
+    }
+
+    .install-btn.show {
+      display: flex;
+    }
+
+    /* ── FORM AREA ── */
     .form-area {
       flex: 1;
       padding: 40px 40px 0;
       overflow-y: auto;
     }
 
-    /* SECTION */
+    /* ── SECTION ── */
     .section {
       margin-bottom: 36px;
       animation: slideUp 0.4s ease both;
@@ -372,15 +442,24 @@
         opacity: 0;
         transform: translateY(12px);
       }
+
       to {
         opacity: 1;
         transform: translateY(0);
       }
     }
 
-    .section:nth-child(1) { animation-delay: 0.05s; }
-    .section:nth-child(2) { animation-delay: 0.1s; }
-    .section:nth-child(3) { animation-delay: 0.15s; }
+    .section:nth-child(1) {
+      animation-delay: 0.05s;
+    }
+
+    .section:nth-child(2) {
+      animation-delay: 0.1s;
+    }
+
+    .section:nth-child(3) {
+      animation-delay: 0.15s;
+    }
 
     .section-label {
       font-family: var(--mono);
@@ -402,7 +481,7 @@
       background: var(--rule);
     }
 
-    /* INPUTS */
+    /* ── INPUTS ── */
     .input-group {
       position: relative;
       margin-bottom: 14px;
@@ -443,7 +522,7 @@
       color: var(--paper);
       outline: none;
       transition: border-color 0.15s, background 0.15s;
-      appearance: none;
+      -webkit-appearance: none;
       -moz-appearance: textfield;
     }
 
@@ -468,7 +547,7 @@
       display: none;
     }
 
-    /* URL FIELD WITH HISTORY */
+    /* ── URL FIELD ── */
     .url-field-wrap {
       position: relative;
     }
@@ -480,10 +559,12 @@
 
     .url-input-row input {
       flex: 1;
+      min-width: 0;
     }
 
     .icon-btn {
       width: 42px;
+      height: 42px;
       flex-shrink: 0;
       background: var(--ink2);
       border: 1px solid var(--rule);
@@ -495,6 +576,7 @@
       align-items: center;
       justify-content: center;
       transition: all 0.15s;
+      -webkit-tap-highlight-color: transparent;
     }
 
     .icon-btn:hover {
@@ -503,7 +585,11 @@
       border-color: rgba(255, 255, 255, 0.1);
     }
 
-    /* HISTORY DROPDOWN */
+    .icon-btn:active {
+      transform: scale(0.94);
+    }
+
+    /* ── HISTORY DROPDOWN ── */
     .hist-dropdown {
       position: absolute;
       top: calc(100% + 4px);
@@ -563,7 +649,7 @@
       font-style: italic;
     }
 
-    /* SETTINGS GRID */
+    /* ── SETTINGS GRID ── */
     .settings-grid {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
@@ -571,7 +657,11 @@
       margin-bottom: 14px;
     }
 
-    /* TOGGLE ROW */
+    .settings-grid .input-group {
+      margin-bottom: 0;
+    }
+
+    /* ── TOGGLE ROW ── */
     .toggles-row {
       display: flex;
       gap: 10px;
@@ -590,6 +680,8 @@
       transition: border-color 0.15s, background 0.15s;
       flex: 1;
       min-width: 180px;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
     }
 
     .toggle-chip:hover {
@@ -648,9 +740,12 @@
       background: var(--ink);
     }
 
-    /* ACTION BAR */
+    /* ══════════════════════════════════════════
+       ACTION BAR
+       ══════════════════════════════════════════ */
     .action-bar {
       padding: 24px 40px;
+      padding-bottom: calc(24px + var(--safe-b));
       border-top: 1px solid var(--rule);
       display: flex;
       gap: 10px;
@@ -672,6 +767,7 @@
       align-items: center;
       gap: 10px;
       white-space: nowrap;
+      -webkit-tap-highlight-color: transparent;
     }
 
     .btn:active {
@@ -719,7 +815,9 @@
       border-color: rgba(255, 255, 255, 0.08);
     }
 
-    /* PROGRESS PANEL */
+    /* ══════════════════════════════════════════
+       PROGRESS OVERLAY
+       ══════════════════════════════════════════ */
     .progress-overlay {
       position: fixed;
       inset: 0;
@@ -762,7 +860,7 @@
       letter-spacing: 0.05em;
     }
 
-    /* BIG COUNTER */
+    /* ── BIG COUNTER ── */
     .big-counter {
       display: flex;
       align-items: baseline;
@@ -791,7 +889,7 @@
       color: rgba(245, 240, 232, 0.35);
     }
 
-    /* PROGRESS TRACK */
+    /* ── PROGRESS TRACK ── */
     .prog-track {
       height: 2px;
       background: rgba(255, 255, 255, 0.06);
@@ -818,7 +916,7 @@
       margin-bottom: 32px;
     }
 
-    /* PAGE GRID */
+    /* ── PAGE TILES ── */
     .page-tiles {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(38px, 1fr));
@@ -859,12 +957,17 @@
     }
 
     @keyframes tileGlow {
-      from { background: var(--ink3); }
-      to { background: var(--gold-dim); }
+      from {
+        background: var(--ink3);
+      }
+
+      to {
+        background: var(--gold-dim);
+      }
     }
 
     .pt.done {
-      background: rgba(90, 173, 122, 0.12);
+      background: var(--green-dim);
       border-color: rgba(90, 173, 122, 0.3);
       color: var(--green);
     }
@@ -875,7 +978,7 @@
       color: var(--red);
     }
 
-    /* STATUS LINE */
+    /* ── STATUS LINE ── */
     .status-line-row {
       display: flex;
       align-items: center;
@@ -908,8 +1011,15 @@
     }
 
     @keyframes pulse {
-      0%, 100% { opacity: 1 }
-      50% { opacity: 0.3 }
+
+      0%,
+      100% {
+        opacity: 1
+      }
+
+      50% {
+        opacity: 0.3
+      }
     }
 
     .status-msg {
@@ -924,20 +1034,105 @@
       font-family: var(--mono);
       font-size: 10px;
       color: rgba(245, 240, 232, 0.2);
+      flex-shrink: 0;
     }
 
-    /* PROGRESS BUTTONS */
+    /* ── PROGRESS BUTTONS ── */
     .prog-actions {
       display: flex;
       gap: 10px;
     }
 
-    /* HIDDEN */
+    .btn-close {
+      background: transparent;
+      color: rgba(245, 240, 232, 0.3);
+      border-color: var(--rule);
+      flex: 1;
+      justify-content: center;
+    }
+
+    /* ══════════════════════════════════════════
+       TOASTS
+       ══════════════════════════════════════════ */
+    #toasts {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 500;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      align-items: center;
+      pointer-events: none;
+      max-width: calc(100% - 32px);
+      width: 360px;
+    }
+
+    .toast {
+      background: var(--ink3);
+      color: var(--paper);
+      padding: 10px 18px;
+      border-radius: 3px;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 400;
+      border: 1px solid var(--rule);
+      opacity: 0;
+      transform: translateY(8px);
+      transition: all 0.3s ease;
+      pointer-events: auto;
+      text-align: center;
+      width: 100%;
+    }
+
+    .toast.vis {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .toast.err {
+      border-color: rgba(200, 90, 90, 0.3);
+      color: var(--red);
+    }
+
+    .toast.ok {
+      border-color: rgba(90, 173, 122, 0.3);
+      color: var(--green);
+    }
+
     .hidden {
       display: none !important;
     }
 
-    /* RESPONSIVE */
+    /* ══════════════════════════════════════════
+       MOBILE LOG TOGGLE (hidden on desktop)
+       ══════════════════════════════════════════ */
+    .mob-log-btn {
+      display: none;
+      align-items: center;
+      padding: 2px 8px;
+      background: var(--ink3);
+      border: 1px solid var(--rule);
+      border-radius: 3px;
+      color: rgba(245, 240, 232, 0.3);
+      font-family: var(--mono);
+      font-size: 9px;
+      font-weight: 400;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+      transition: all 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .mob-log-btn:active {
+      background: var(--ink4);
+      color: rgba(245, 240, 232, 0.5);
+    }
+
+    /* ══════════════════════════════════════════
+       RESPONSIVE — TABLET / MOBILE (≤800px)
+       ══════════════════════════════════════════ */
     @media (max-width: 800px) {
       .page {
         grid-template-columns: 1fr;
@@ -946,30 +1141,236 @@
       .sidebar {
         position: static;
         height: auto;
+        border-right: none;
+        border-bottom: 1px solid var(--rule);
+        overflow: visible;
+      }
+
+      .sidebar-top {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 18px 24px 14px;
+      }
+
+      .logo-mark {
+        font-size: 34px;
+        margin-bottom: 0;
+      }
+
+      .logo-sub {
+        font-size: 9px;
+      }
+
+      .sidebar-meta {
+        padding: 14px 24px;
+      }
+
+      .meta-grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+      }
+
+      .meta-val {
+        font-size: 16px;
+      }
+
+      .meta-unit {
+        font-size: 9px;
+      }
+
+      .mob-log-btn {
+        display: inline-flex;
       }
 
       .sidebar-log {
-        max-height: 140px;
+        display: none;
+        padding: 0 24px;
+        max-height: 0;
+        overflow: hidden;
       }
 
-      .form-area {
-        padding: 24px 20px 0;
+      .sidebar-log.mob-open {
+        display: flex;
+        max-height: 160px;
+        padding: 0 24px 14px;
       }
 
-      .action-bar {
-        padding: 16px 20px;
+      .sidebar-log .log-header {
+        padding: 0 0 8px;
+      }
+
+      .sidebar-log .log-body {
+        padding: 8px 0;
+      }
+
+      .proxy-badge {
+        display: none;
       }
 
       .topbar {
-        padding: 16px 20px;
+        padding: 12px 24px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+      }
+
+      .topbar::-webkit-scrollbar {
+        display: none;
+      }
+
+      .topbar-left {
+        gap: 8px;
+      }
+
+      .step-pill {
+        font-size: 9px;
+        padding: 3px 8px;
+      }
+
+      #clock-display {
+        display: none;
+      }
+
+      .form-area {
+        padding: 24px 24px 0;
+      }
+
+      .section {
+        margin-bottom: 28px;
+      }
+
+      .action-bar {
+        padding: 16px 24px;
+        padding-bottom: calc(16px + var(--safe-b));
+      }
+
+      .progress-overlay {
+        padding: 24px;
+        padding-bottom: calc(24px + var(--safe-b));
+        justify-content: flex-start;
+        overflow-y: auto;
+      }
+
+      .prog-title {
+        font-size: 32px;
+      }
+
+      .prog-subtitle {
+        margin-bottom: 28px;
+      }
+
+      .big-num {
+        font-size: 64px;
+      }
+
+      .big-sep,
+      .big-total {
+        font-size: 32px;
+      }
+
+      .prog-meta-row {
+        margin-bottom: 20px;
+      }
+
+      .page-tiles {
+        margin-bottom: 20px;
+      }
+    }
+
+    /* ══════════════════════════════════════════
+       RESPONSIVE — SMALL MOBILE (≤480px)
+       ══════════════════════════════════════════ */
+    @media (max-width: 480px) {
+      .sidebar-top {
+        padding: 14px 16px 12px;
+      }
+
+      .logo-mark {
+        font-size: 28px;
+      }
+
+      .sidebar-meta {
+        padding: 10px 16px;
+      }
+
+      .meta-val {
+        font-size: 14px;
+      }
+
+      .meta-unit {
+        font-size: 8px;
+      }
+
+      .sidebar-log.mob-open {
+        padding: 0 16px 10px;
+      }
+
+      .topbar {
+        padding: 10px 16px;
+      }
+
+      .step-pill {
+        font-size: 8px;
+        padding: 2px 6px;
+        letter-spacing: 0.05em;
+      }
+
+      .form-area {
+        padding: 16px 16px 0;
+      }
+
+      .section {
+        margin-bottom: 20px;
       }
 
       .settings-grid {
         grid-template-columns: 1fr 1fr;
       }
 
+      .toggle-chip {
+        min-width: 140px;
+        padding: 8px 12px;
+      }
+
+      .tc-label {
+        font-size: 10px;
+      }
+
+      .action-bar {
+        padding: 12px 16px;
+        padding-bottom: calc(12px + var(--safe-b));
+        flex-direction: column;
+      }
+
+      .action-bar .btn {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .prog-title {
+        font-size: 28px;
+      }
+
       .big-num {
-        font-size: 64px;
+        font-size: 52px;
+      }
+
+      .big-sep,
+      .big-total {
+        font-size: 26px;
+      }
+
+      .page-tiles {
+        grid-template-columns: repeat(auto-fill, minmax(28px, 1fr));
+      }
+
+      .prog-actions {
+        flex-direction: column;
+      }
+
+      #toasts {
+        bottom: calc(16px + var(--safe-b));
       }
     }
   </style>
@@ -979,15 +1380,18 @@
 
   <div class="page">
 
-    <!-- SIDEBAR -->
+    <!-- ═══ SIDEBAR ═══ -->
     <aside class="sidebar">
       <div class="sidebar-top">
         <div class="logo-mark">FLIP<span>2</span>PDF</div>
-        <div class="logo-sub">Proxy Edition · v4.1</div>
+        <div class="logo-sub">Proxy Edition · v4.2</div>
       </div>
 
       <div class="sidebar-meta">
-        <div class="meta-label">Session Stats</div>
+        <div class="meta-label">
+          Session Stats
+          <button class="mob-log-btn" id="mob-log-btn" onclick="toggleMobLog()">Log</button>
+        </div>
         <div class="meta-grid">
           <div>
             <div class="meta-val" id="stat-pages">—</div>
@@ -998,7 +1402,7 @@
             <div class="meta-unit">est. size</div>
           </div>
           <div>
-            <div class="meta-val" id="stat-done">0</div>
+            <div class="meta-val green" id="stat-done">0</div>
             <div class="meta-unit">downloaded</div>
           </div>
           <div>
@@ -1008,7 +1412,7 @@
         </div>
       </div>
 
-      <div class="sidebar-log">
+      <div class="sidebar-log" id="sidebar-log">
         <div class="log-header">System Log</div>
         <div class="log-body" id="log-body">
           <div class="log-line info">
@@ -1027,7 +1431,7 @@
       </div>
     </aside>
 
-    <!-- MAIN -->
+    <!-- ═══ MAIN ═══ -->
     <main class="main">
       <div class="topbar">
         <div class="topbar-left">
@@ -1035,7 +1439,10 @@
           <div class="step-pill" id="step-2">02 · Settings</div>
           <div class="step-pill" id="step-3">03 · Download</div>
         </div>
-        <div class="topbar-right" id="clock-display">--:--:--</div>
+        <div class="topbar-right">
+          <span id="clock-display">--:--:--</span>
+          <button class="install-btn" id="install-btn" onclick="installApp()">↓ Install</button>
+        </div>
       </div>
 
       <div class="form-area">
@@ -1052,7 +1459,7 @@
             <div class="url-field-wrap">
               <div class="url-input-row">
                 <input type="text" id="url-input" placeholder="https://example.com/books/mybook/index.html"
-                  autocomplete="off" spellcheck="false" oninput="onUrlChange()">
+                  autocomplete="off" spellcheck="false" autocapitalize="off" inputmode="url" oninput="onUrlChange()">
                 <button class="icon-btn" onclick="toggleHistory()" title="Show history">↕</button>
                 <button class="icon-btn" onclick="clearUrl()" title="Clear">✕</button>
               </div>
@@ -1071,23 +1478,23 @@
           <div class="section-label">02 · Download Settings</div>
 
           <div class="settings-grid">
-            <div class="input-group" style="margin-bottom:0">
+            <div class="input-group">
               <div class="field-label">Start page</div>
-              <input type="number" id="start-pg" value="1" min="1">
+              <input type="number" id="start-pg" value="1" min="1" inputmode="numeric">
             </div>
-            <div class="input-group" style="margin-bottom:0">
+            <div class="input-group">
               <div class="field-label">
                 End page
                 <span class="field-hint">blank = auto</span>
               </div>
-              <input type="number" id="end-pg" placeholder="Auto-detect">
+              <input type="number" id="end-pg" placeholder="Auto-detect" inputmode="numeric">
             </div>
-            <div class="input-group" style="margin-bottom:0">
+            <div class="input-group">
               <div class="field-label">
                 Concurrency
                 <span class="field-hint">1–20</span>
               </div>
-              <input type="number" id="threads" value="8" min="1" max="20">
+              <input type="number" id="threads" value="8" min="1" max="20" inputmode="numeric">
             </div>
           </div>
         </div>
@@ -1126,7 +1533,7 @@
 
   </div><!-- /page -->
 
-  <!-- PROGRESS OVERLAY -->
+  <!-- ═══ PROGRESS OVERLAY ═══ -->
   <div class="progress-overlay" id="progress-overlay">
     <div class="prog-box">
 
@@ -1160,7 +1567,7 @@
         <button class="btn btn-cancel" id="cancel-btn" onclick="cancelJob()">
           ✕ &nbsp;CANCEL
         </button>
-        <button class="btn btn-ghost hidden" id="close-btn" onclick="closeProgress()">
+        <button class="btn btn-close hidden" id="close-btn" onclick="closeProgress()">
           ← &nbsp;BACK
         </button>
       </div>
@@ -1168,10 +1575,13 @@
     </div>
   </div>
 
+  <!-- TOASTS -->
+  <div id="toasts"></div>
+
   <script>
-    // ══════════════════════════════════════════
-    //  CONSTANTS
-    // ══════════════════════════════════════════
+    /* ══════════════════════════════════════
+       CONSTANTS & STATE
+       ══════════════════════════════════════ */
     const PROXY_PATH = '/api/proxy?url=';
     const HIST_KEY = 'f2p_history_v2';
     const HIST_MAX = 12;
@@ -1181,24 +1591,77 @@
     let donePgs = 0;
     let failPgs = 0;
     let startTime = 0;
-
-    // Toggles
     let chips = { 'tc-auto': true, 'tc-retry': true, 'tc-compress': true };
 
-    // ══════════════════════════════════════════
-    //  CLOCK
-    // ══════════════════════════════════════════
+    const isOn = id => chips[id];
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+    /* ══════════════════════════════════════
+       PWA — INSTALL
+       ══════════════════════════════════════ */
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', e => {
+      e.preventDefault();
+      deferredPrompt = e;
+      document.getElementById('install-btn').classList.add('show');
+    });
+
+    async function installApp() {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') { toast('App installed!', 'ok'); log('App installed', 'ok'); }
+      deferredPrompt = null;
+      document.getElementById('install-btn').classList.remove('show');
+    }
+
+    window.addEventListener('appinstalled', () => {
+      document.getElementById('install-btn').classList.remove('show');
+    });
+
+    /* ══════════════════════════════════════
+       PWA — SERVICE WORKER
+       ══════════════════════════════════════ */
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').then(reg => {
+        reg.addEventListener('updatefound', () => {
+          const nw = reg.installing;
+          nw.addEventListener('statechange', () => {
+            if (nw.state === 'activated') toast('App updated — refresh for latest', 'ok');
+          });
+        });
+      }).catch(() => { });
+    }
+
+    /* ══════════════════════════════════════
+       TOAST
+       ══════════════════════════════════════ */
+    function toast(msg, type = '') {
+      const c = document.getElementById('toasts');
+      const el = document.createElement('div');
+      el.className = 'toast' + (type ? ' ' + type : '');
+      el.textContent = msg;
+      c.appendChild(el);
+      requestAnimationFrame(() => el.classList.add('vis'));
+      setTimeout(() => {
+        el.classList.remove('vis');
+        setTimeout(() => el.remove(), 300);
+      }, 3500);
+    }
+
+    /* ══════════════════════════════════════
+       CLOCK
+       ══════════════════════════════════════ */
     function updateClock() {
-      const now = new Date();
-      document.getElementById('clock-display').textContent =
-        now.toTimeString().slice(0, 8);
+      const el = document.getElementById('clock-display');
+      if (el) el.textContent = new Date().toTimeString().slice(0, 8);
     }
     setInterval(updateClock, 1000);
     updateClock();
 
-    // ══════════════════════════════════════════
-    //  LOG
-    // ══════════════════════════════════════════
+    /* ══════════════════════════════════════
+       LOG
+       ══════════════════════════════════════ */
     function log(msg, type = '') {
       const body = document.getElementById('log-body');
       const now = new Date().toTimeString().slice(0, 8);
@@ -1209,9 +1672,16 @@
       body.scrollTop = body.scrollHeight;
     }
 
-    // ══════════════════════════════════════════
-    //  HISTORY
-    // ══════════════════════════════════════════
+    /* ══════════════════════════════════════
+       MOBILE LOG TOGGLE
+       ══════════════════════════════════════ */
+    function toggleMobLog() {
+      document.getElementById('sidebar-log').classList.toggle('mob-open');
+    }
+
+    /* ══════════════════════════════════════
+       HISTORY
+       ══════════════════════════════════════ */
     function loadHistory() {
       try { return JSON.parse(localStorage.getItem(HIST_KEY) || '[]'); } catch { return []; }
     }
@@ -1225,6 +1695,7 @@
 
     function clearHistory() {
       localStorage.removeItem(HIST_KEY);
+      toast('History cleared');
       log('History cleared', 'warn');
       renderDropdown();
     }
@@ -1242,9 +1713,8 @@
     }
 
     function toggleHistory() {
-      const dd = document.getElementById('hist-dropdown');
       renderDropdown();
-      dd.classList.toggle('open');
+      document.getElementById('hist-dropdown').classList.toggle('open');
     }
 
     function pickHistory(el) {
@@ -1266,43 +1736,33 @@
 
     function onUrlChange() {
       const url = document.getElementById('url-input').value.trim();
-      if (url && url.includes('index.html')) {
-        setStep(1);
-      }
+      if (url && url.includes('index.html')) setStep(1);
     }
 
-    // ══════════════════════════════════════════
-    //  PROXY (backend — no user config needed)
-    // ══════════════════════════════════════════
-    function getProxyUrl(targetUrl) {
-      return PROXY_PATH + encodeURIComponent(targetUrl);
-    }
-
-    // ══════════════════════════════════════════
-    //  TOGGLES
-    // ══════════════════════════════════════════
+    /* ══════════════════════════════════════
+       TOGGLES & STEPS
+       ══════════════════════════════════════ */
     function toggleChip(id) {
       chips[id] = !chips[id];
       document.getElementById(id).classList.toggle('on', chips[id]);
     }
 
-    function isOn(id) { return chips[id]; }
-
-    // ══════════════════════════════════════════
-    //  STEP INDICATORS
-    // ══════════════════════════════════════════
     function setStep(n) {
       for (let i = 1; i <= 3; i++) {
-        const el = document.getElementById(`step-${i}`);
+        const el = document.getElementById('step-' + i);
         el.classList.remove('active', 'done');
         if (i < n) el.classList.add('done');
         else if (i === n) el.classList.add('active');
       }
     }
 
-    // ══════════════════════════════════════════
-    //  URL PARSING
-    // ══════════════════════════════════════════
+    /* ══════════════════════════════════════
+       PROXY & URL PARSING
+       ══════════════════════════════════════ */
+    function getProxyUrl(targetUrl) {
+      return PROXY_PATH + encodeURIComponent(targetUrl);
+    }
+
     function buildBaseUrl(indexUrl) {
       const url = new URL(indexUrl);
       const parts = url.pathname.replace(/^\/|\/$/g, '').split('/');
@@ -1310,42 +1770,41 @@
         throw new Error('URL must end with /index.html — check the address.');
       const parentPath = parts.slice(0, -1).join('/');
       const code = parts[parts.length - 2];
-      const base = `${url.protocol}//${url.host}/${parentPath}/files/mobile/{N}.jpg`;
-      return { base, code };
+      return { base: `${url.protocol}//${url.host}/${parentPath}/files/mobile/{N}.jpg`, code };
     }
 
-    // ══════════════════════════════════════════
-    //  DETECT PAGES (binary search)
-    // ══════════════════════════════════════════
+    /* ══════════════════════════════════════
+       DETECT PAGES (binary search)
+       ══════════════════════════════════════ */
     async function detectTotalPages(base) {
-      setStatus('Detecting total pages via binary search…', 'active');
-      log('Binary search: probing 1→2000', 'info');
+      setStatus('Detecting total pages via binary search\u2026', 'active');
+      log('Binary search: probing 1\u21922000', 'info');
       let low = 1, high = 2000, last = 0;
 
       while (low <= high) {
         if (cancelFlag) throw new Error('Cancelled');
         const mid = Math.floor((low + high) / 2);
-        const url = getProxyUrl(base.replace('{N}', mid));
         try {
-          const r = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(8000) });
-          if (r.ok) { last = mid; low = mid + 1; }
-          else high = mid - 1;
+          const r = await fetch(getProxyUrl(base.replace('{N}', mid)), {
+            method: 'HEAD', signal: AbortSignal.timeout(8000)
+          });
+          if (r.ok) { last = mid; low = mid + 1; } else high = mid - 1;
         } catch { high = mid - 1; }
       }
 
       if (!last) throw new Error('No valid pages found. Check the URL and try again.');
-      log(`Detected ${last} pages`, 'ok');
+      log('Detected ' + last + ' pages', 'ok');
       return last;
     }
 
-    // ══════════════════════════════════════════
-    //  FETCH ONE IMAGE → base64
-    // ══════════════════════════════════════════
+    /* ══════════════════════════════════════
+       FETCH IMAGE
+       ══════════════════════════════════════ */
     async function fetchImage(rawUrl, retries = isOn('tc-retry') ? 2 : 0) {
       for (let i = 0; i <= retries; i++) {
         try {
           const r = await fetch(getProxyUrl(rawUrl), { signal: AbortSignal.timeout(15000) });
-          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          if (!r.ok) throw new Error('HTTP ' + r.status);
           const blob = await r.blob();
           return await blobToB64(blob);
         } catch (e) {
@@ -1364,37 +1823,35 @@
       });
     }
 
-    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-    // ══════════════════════════════════════════
-    //  TILES
-    // ══════════════════════════════════════════
+    /* ══════════════════════════════════════
+       TILES
+       ══════════════════════════════════════ */
     function renderTiles(start, end) {
       const grid = document.getElementById('page-tiles');
       grid.innerHTML = '';
       for (let i = start; i <= end; i++) {
         const d = document.createElement('div');
         d.className = 'pt';
-        d.id = `pt-${i}`;
+        d.id = 'pt-' + i;
         d.textContent = i;
         grid.appendChild(d);
       }
     }
 
     function setTile(n, state) {
-      const el = document.getElementById(`pt-${n}`);
+      const el = document.getElementById('pt-' + n);
       if (el) el.className = 'pt ' + state;
     }
 
-    // ══════════════════════════════════════════
-    //  STATS UPDATE
-    // ══════════════════════════════════════════
+    /* ══════════════════════════════════════
+       STATS & STATUS
+       ══════════════════════════════════════ */
     function updateStats() {
       document.getElementById('stat-done').textContent = donePgs;
       document.getElementById('stat-fail').textContent = failPgs;
-      document.getElementById('stat-pages').textContent = totalPages || '—';
-      const estMB = totalPages ? (totalPages * 0.18).toFixed(1) : '—';
-      document.getElementById('stat-size').textContent = totalPages ? estMB + ' MB' : '—';
+      document.getElementById('stat-pages').textContent = totalPages || '\u2014';
+      const estMB = totalPages ? (totalPages * 0.18).toFixed(1) : '\u2014';
+      document.getElementById('stat-size').textContent = totalPages ? estMB + ' MB' : '\u2014';
 
       document.getElementById('big-done').textContent = donePgs;
       document.getElementById('big-total').textContent = totalPages;
@@ -1407,23 +1864,20 @@
         const elapsed = (Date.now() - startTime) / 1000;
         const rate = donePgs / elapsed;
         const rem = Math.max(0, Math.round((totalPages - donePgs) / rate));
-        document.getElementById('eta-label').textContent = rem > 0 ? `~${rem}s remaining` : '';
+        document.getElementById('eta-label').textContent = rem > 0 ? '~' + rem + 's remaining' : '';
         document.getElementById('speed-label').textContent = rate.toFixed(1) + ' pg/s';
       }
     }
 
-    // ══════════════════════════════════════════
-    //  STATUS
-    // ══════════════════════════════════════════
-    function setStatus(msg, state = 'active') {
+    function setStatus(msg, state) {
       document.getElementById('status-msg').textContent = msg;
       document.getElementById('status-dot').className = 'status-indicator ' + state;
       document.getElementById('prog-subtitle').textContent = msg;
     }
 
-    // ══════════════════════════════════════════
-    //  CONCURRENT DOWNLOAD POOL
-    // ══════════════════════════════════════════
+    /* ══════════════════════════════════════
+       CONCURRENT DOWNLOAD POOL
+       ══════════════════════════════════════ */
     async function downloadAll(base, start, end, concurrency) {
       const pages = [];
       for (let i = start; i <= end; i++) pages.push(i);
@@ -1435,17 +1889,16 @@
           if (cancelFlag) return;
           const cur = idx++;
           const pg = pages[cur];
-          const rawUrl = base.replace('{N}', pg);
           setTile(pg, 'loading');
           try {
-            const b64 = await fetchImage(rawUrl);
+            const b64 = await fetchImage(base.replace('{N}', pg));
             results[cur] = { pg, b64 };
             donePgs++;
             setTile(pg, 'done');
           } catch (e) {
             failPgs++;
             setTile(pg, 'fail');
-            log(`Page ${pg} failed: ${e.message}`, 'err');
+            log('Page ' + pg + ' failed: ' + e.message, 'err');
           }
           updateStats();
         }
@@ -1457,12 +1910,12 @@
       return results.filter(Boolean);
     }
 
-    // ══════════════════════════════════════════
-    //  BUILD PDF
-    // ══════════════════════════════════════════
+    /* ══════════════════════════════════════
+       BUILD PDF
+       ══════════════════════════════════════ */
     async function buildPDF(images, filename) {
-      setStatus('Building PDF document…', 'active');
-      log('Assembling pages into PDF…', 'info');
+      setStatus('Building PDF document\u2026', 'active');
+      log('Assembling pages into PDF\u2026', 'info');
 
       const { jsPDF } = window.jspdf;
       if (!images.length) throw new Error('No pages downloaded successfully.');
@@ -1496,9 +1949,9 @@
       });
     }
 
-    // ══════════════════════════════════════════
-    //  MAIN JOB
-    // ══════════════════════════════════════════
+    /* ══════════════════════════════════════
+       MAIN JOB
+       ══════════════════════════════════════ */
     async function startJob() {
       const urlVal = document.getElementById('url-input').value.trim();
       const outVal = document.getElementById('out-input').value.trim() || 'Flipbook.pdf';
@@ -1506,12 +1959,12 @@
       const endPgVal = document.getElementById('end-pg').value.trim();
       const concurrency = Math.min(20, Math.max(1, parseInt(document.getElementById('threads').value) || 8));
 
-      if (!urlVal) { alert('Enter a Flipbook URL.'); return; }
+      if (!urlVal) { toast('Enter a Flipbook URL.', 'err'); return; }
 
       let base, code;
       try {
         ({ base, code } = buildBaseUrl(urlVal));
-      } catch (e) { alert(e.message); return; }
+      } catch (e) { toast(e.message, 'err'); return; }
 
       // Reset state
       cancelFlag = false;
@@ -1529,22 +1982,23 @@
       document.getElementById('eta-label').textContent = '';
       document.getElementById('speed-label').textContent = '';
       document.getElementById('big-done').textContent = '0';
+      document.getElementById('big-done').style.color = '';
       document.getElementById('big-total').textContent = '0';
       document.getElementById('prog-fill').style.width = '0%';
 
       setStep(3);
       saveHistory(urlVal);
-      log(`Starting: ${urlVal}`, 'ok');
-      log(`Pattern: ${base}`, 'info');
+      log('Starting: ' + urlVal, 'ok');
+      log('Pattern: ' + base, 'info');
 
       try {
         let endPg;
-        if (endPgVal && !isOn('tc-auto')) {
+        if (endPgVal) {
           endPg = parseInt(endPgVal);
-        } else if (endPgVal) {
-          endPg = parseInt(endPgVal);
-        } else {
+        } else if (isOn('tc-auto')) {
           endPg = await detectTotalPages(base);
+        } else {
+          endPg = parseInt(endPgVal) || 1;
         }
 
         if (startPg > endPg) throw new Error('Start page exceeds end page.');
@@ -1554,8 +2008,8 @@
         updateStats();
         renderTiles(startPg, endPg);
 
-        setStatus(`Downloading ${totalPages} pages at ×${concurrency} concurrency…`, 'active');
-        log(`Downloading pages ${startPg}–${endPg} (${totalPages} total, ${concurrency} concurrent)`, 'info');
+        setStatus('Downloading ' + totalPages + ' pages at \u00d7' + concurrency + ' concurrency\u2026', 'active');
+        log('Pages ' + startPg + '\u2013' + endPg + ' (' + totalPages + ' total, ' + concurrency + ' concurrent)', 'info');
 
         const images = await downloadAll(base, startPg, endPg, concurrency);
 
@@ -1567,18 +2021,20 @@
 
         if (!images.length) throw new Error('All pages failed to download. Check the source URL.');
 
-        log(`${images.length}/${totalPages} pages ready. Building PDF…`, 'ok');
+        log(images.length + '/' + totalPages + ' pages ready. Building PDF\u2026', 'ok');
         const saved = await buildPDF(images, outVal);
 
-        setStatus(`Done — ${saved}`, 'done');
-        document.getElementById('prog-subtitle').textContent = `PDF saved: ${saved}`;
-        log(`PDF complete: ${saved}`, 'ok');
+        setStatus('Done \u2014 ' + saved, 'done');
+        document.getElementById('prog-subtitle').textContent = 'PDF saved: ' + saved;
+        log('PDF complete: ' + saved, 'ok');
         document.getElementById('big-done').style.color = 'var(--green)';
+        toast('PDF downloaded!', 'ok');
 
       } catch (e) {
         if (!cancelFlag) {
           setStatus('Error: ' + e.message, 'err');
           log('Fatal: ' + e.message, 'err');
+          toast(e.message, 'err');
         }
       } finally {
         document.getElementById('cancel-btn').classList.add('hidden');
@@ -1589,9 +2045,9 @@
 
     function cancelJob() {
       cancelFlag = true;
-      setStatus('Cancelling…', 'err');
+      setStatus('Cancelling\u2026', 'err');
       document.getElementById('cancel-btn').disabled = true;
-      log('Cancel requested…', 'warn');
+      log('Cancel requested\u2026', 'warn');
     }
 
     function closeProgress() {
@@ -1600,9 +2056,9 @@
       document.getElementById('big-done').style.color = '';
     }
 
-    // ══════════════════════════════════════════
-    //  INIT
-    // ══════════════════════════════════════════
+    /* ══════════════════════════════════════
+       INIT
+       ══════════════════════════════════════ */
     log('Flip2PDF Proxy Edition ready', 'ok');
     log('Backend proxy: /api/proxy', 'info');
     setStep(1);

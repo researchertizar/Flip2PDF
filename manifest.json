@@ -1,0 +1,26 @@
+{
+  "name": "Flip2PDF — Convert Flipbooks to PDF",
+  "short_name": "Flip2PDF",
+  "description": "Convert online flipbooks to downloadable PDF files",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0e0d0b",
+  "theme_color": "#0e0d0b",
+  "categories": ["utilities", "productivity"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

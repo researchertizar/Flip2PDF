@@ -1,7 +1,7 @@
 {
-  "name": "flip2pdf-proxy",
-  "version": "1.0.0",
-  "description": "Flip2PDF serverless proxy for Vercel",
+  "name": "flip2pdf",
+  "version": "4.2.0",
+  "description": "Flip2PDF — convert online flipbooks to PDF",
   "private": true,
   "scripts": {
     "dev": "vercel dev"
