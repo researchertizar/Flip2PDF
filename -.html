@@ -1,0 +1,1712 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flip2PDF — Proxy Edition</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@300;400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap"
+    rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --ink: #0e0d0b;
+      --ink2: #1a1917;
+      --ink3: #252320;
+      --ink4: #302e2b;
+      --paper: #f5f0e8;
+      --paper2: #ede7d8;
+      --paper3: #e2dace;
+      --gold: #c8a85a;
+      --gold-dim: rgba(200, 168, 90, 0.15);
+      --gold-border: rgba(200, 168, 90, 0.35);
+      --green: #5aad7a;
+      --green-dim: rgba(90, 173, 122, 0.12);
+      --red: #c85a5a;
+      --red-dim: rgba(200, 90, 90, 0.12);
+      --blue: #5a8ac8;
+      --rule: rgba(255, 255, 255, 0.05);
+      --rule-paper: rgba(0, 0, 0, 0.08);
+      --mono: 'IBM Plex Mono', monospace;
+      --sans: 'IBM Plex Sans', sans-serif;
+      --display: 'Bebas Neue', sans-serif;
+    }
+
+    html {
+      font-size: 16px;
+    }
+
+    body {
+      font-family: var(--sans);
+      background: var(--ink);
+      color: var(--paper);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ══ SCANLINE OVERLAY ══ */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(0deg,
+          transparent,
+          transparent 2px,
+          rgba(0, 0, 0, 0.03) 2px,
+          rgba(0, 0, 0, 0.03) 4px);
+      pointer-events: none;
+      z-index: 1000;
+    }
+
+    /* ══ NOISE TEXTURE ══ */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      background-repeat: repeat;
+      background-size: 128px;
+      pointer-events: none;
+      z-index: 999;
+      opacity: 0.6;
+    }
+
+    /* ══ LAYOUT ══ */
+    .page {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      min-height: 100vh;
+    }
+
+    /* ══ SIDEBAR ══ */
+    .sidebar {
+      border-right: 1px solid var(--rule);
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .sidebar-top {
+      padding: 32px 28px 28px;
+      border-bottom: 1px solid var(--rule);
+      flex-shrink: 0;
+    }
+
+    .logo-mark {
+      font-family: var(--display);
+      font-size: 52px;
+      line-height: 0.9;
+      letter-spacing: 1px;
+      color: var(--paper);
+      margin-bottom: 8px;
+    }
+
+    .logo-mark span {
+      color: var(--gold);
+    }
+
+    .logo-sub {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 300;
+      color: rgba(245, 240, 232, 0.3);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+    }
+
+    .sidebar-meta {
+      padding: 24px 28px;
+      border-bottom: 1px solid var(--rule);
+      flex-shrink: 0;
+    }
+
+    .meta-label {
+      font-family: var(--mono);
+      font-size: 9px;
+      font-weight: 400;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: rgba(245, 240, 232, 0.25);
+      margin-bottom: 10px;
+    }
+
+    .meta-val {
+      font-family: var(--mono);
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--paper);
+      line-height: 1;
+      margin-bottom: 4px;
+      transition: color 0.3s;
+    }
+
+    .meta-val.gold {
+      color: var(--gold);
+    }
+
+    .meta-val.green {
+      color: var(--green);
+    }
+
+    .meta-val.red {
+      color: var(--red);
+    }
+
+    .meta-unit {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 300;
+      color: rgba(245, 240, 232, 0.3);
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    /* ── SIDEBAR LOG ── */
+    .sidebar-log {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      padding: 20px 0 0;
+    }
+
+    .log-header {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: rgba(245, 240, 232, 0.25);
+      padding: 0 28px 12px;
+      border-bottom: 1px solid var(--rule);
+      flex-shrink: 0;
+    }
+
+    .log-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .log-body::-webkit-scrollbar {
+      width: 2px;
+    }
+
+    .log-body::-webkit-scrollbar-thumb {
+      background: var(--ink4);
+    }
+
+    .log-line {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 300;
+      color: rgba(245, 240, 232, 0.35);
+      line-height: 1.6;
+      display: flex;
+      gap: 8px;
+      animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateX(-4px);
+      }
+
+      to {
+        opacity: 1;
+      }
+    }
+
+    .log-line .ts {
+      color: rgba(245, 240, 232, 0.15);
+      flex-shrink: 0;
+    }
+
+    .log-line.ok .msg {
+      color: var(--green);
+    }
+
+    .log-line.err .msg {
+      color: var(--red);
+    }
+
+    .log-line.warn .msg {
+      color: var(--gold);
+    }
+
+    .log-line.info .msg {
+      color: var(--blue);
+    }
+
+    /* ── PROXY BADGE ── */
+    .proxy-badge {
+      padding: 16px 28px;
+      border-top: 1px solid var(--rule);
+      flex-shrink: 0;
+    }
+
+    .proxy-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 300;
+      color: rgba(245, 240, 232, 0.35);
+      cursor: pointer;
+      transition: color 0.15s;
+    }
+
+    .proxy-pill:hover {
+      color: rgba(245, 240, 232, 0.6);
+    }
+
+    .proxy-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      flex-shrink: 0;
+      animation: blink 2s infinite;
+    }
+
+    @keyframes blink {
+
+      0%,
+      100% {
+        opacity: 1
+      }
+
+      50% {
+        opacity: 0.3
+      }
+    }
+
+    .proxy-url {
+      font-size: 9px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+      color: rgba(245, 240, 232, 0.2);
+      font-style: italic;
+    }
+
+    /* ══ MAIN CONTENT ══ */
+    .main {
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+    }
+
+    /* ── TOP BAR ── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 40px;
+      border-bottom: 1px solid var(--rule);
+      flex-shrink: 0;
+    }
+
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .step-pill {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 400;
+      letter-spacing: 0.1em;
+      padding: 4px 12px;
+      border-radius: 2px;
+      border: 1px solid var(--rule);
+      color: rgba(245, 240, 232, 0.3);
+      transition: all 0.3s;
+    }
+
+    .step-pill.active {
+      border-color: var(--gold-border);
+      color: var(--gold);
+      background: var(--gold-dim);
+    }
+
+    .step-pill.done {
+      border-color: rgba(90, 173, 122, 0.3);
+      color: var(--green);
+      background: var(--green-dim);
+    }
+
+    .topbar-right {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 300;
+      color: rgba(245, 240, 232, 0.2);
+      letter-spacing: 0.08em;
+    }
+
+    /* ── FORM AREA ── */
+    .form-area {
+      flex: 1;
+      padding: 40px 40px 0;
+      overflow-y: auto;
+    }
+
+    /* ── SECTION ── */
+    .section {
+      margin-bottom: 36px;
+      animation: slideUp 0.4s ease both;
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(12px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .section:nth-child(1) {
+      animation-delay: 0.05s;
+    }
+
+    .section:nth-child(2) {
+      animation-delay: 0.1s;
+    }
+
+    .section:nth-child(3) {
+      animation-delay: 0.15s;
+    }
+
+    .section:nth-child(4) {
+      animation-delay: 0.2s;
+    }
+
+    .section-label {
+      font-family: var(--mono);
+      font-size: 9px;
+      font-weight: 400;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: rgba(245, 240, 232, 0.22);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .section-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--rule);
+    }
+
+    /* ── INPUTS ── */
+    .input-group {
+      position: relative;
+      margin-bottom: 14px;
+    }
+
+    .input-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .field-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 300;
+      color: rgba(245, 240, 232, 0.3);
+      letter-spacing: 0.1em;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .field-hint {
+      font-size: 9px;
+      color: rgba(245, 240, 232, 0.15);
+      font-style: italic;
+    }
+
+    input[type=text],
+    input[type=number] {
+      width: 100%;
+      background: var(--ink2);
+      border: 1px solid var(--rule);
+      border-radius: 3px;
+      padding: 12px 16px;
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 300;
+      color: var(--paper);
+      outline: none;
+      transition: border-color 0.15s, background 0.15s;
+      appearance: none;
+      -moz-appearance: textfield;
+    }
+
+    input[type=text]:hover,
+    input[type=number]:hover {
+      background: var(--ink3);
+      border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    input[type=text]:focus,
+    input[type=number]:focus {
+      background: var(--ink3);
+      border-color: var(--gold-border);
+    }
+
+    input[type=text]::placeholder,
+    input[type=number]::placeholder {
+      color: rgba(245, 240, 232, 0.12);
+    }
+
+    input[type=number]::-webkit-inner-spin-button {
+      display: none;
+    }
+
+    /* ── URL FIELD WITH HISTORY ── */
+    .url-field-wrap {
+      position: relative;
+    }
+
+    .url-input-row {
+      display: flex;
+      gap: 6px;
+    }
+
+    .url-input-row input {
+      flex: 1;
+    }
+
+    .icon-btn {
+      width: 42px;
+      flex-shrink: 0;
+      background: var(--ink2);
+      border: 1px solid var(--rule);
+      border-radius: 3px;
+      color: rgba(245, 240, 232, 0.3);
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+
+    .icon-btn:hover {
+      background: var(--ink3);
+      color: var(--paper);
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    /* ── HISTORY DROPDOWN ── */
+    .hist-dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 48px;
+      background: var(--ink3);
+      border: 1px solid var(--rule);
+      border-radius: 3px;
+      z-index: 50;
+      display: none;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    }
+
+    .hist-dropdown.open {
+      display: block;
+    }
+
+    .hist-item {
+      padding: 10px 14px;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 300;
+      color: rgba(245, 240, 232, 0.4);
+      cursor: pointer;
+      border-bottom: 1px solid var(--rule);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: background 0.1s, color 0.1s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .hist-item::before {
+      content: '↩';
+      font-size: 10px;
+      color: rgba(245, 240, 232, 0.15);
+      flex-shrink: 0;
+    }
+
+    .hist-item:last-child {
+      border-bottom: none;
+    }
+
+    .hist-item:hover {
+      background: var(--ink4);
+      color: var(--paper2);
+    }
+
+    .hist-empty {
+      padding: 12px 14px;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: rgba(245, 240, 232, 0.15);
+      font-style: italic;
+    }
+
+    /* ── SETTINGS GRID ── */
+    .settings-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    /* ── PROXY SETTINGS ── */
+    .proxy-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: end;
+    }
+
+    /* ── TOGGLE ROW ── */
+    .toggles-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .toggle-chip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      background: var(--ink2);
+      border: 1px solid var(--rule);
+      border-radius: 3px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      flex: 1;
+      min-width: 180px;
+    }
+
+    .toggle-chip:hover {
+      background: var(--ink3);
+      border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .toggle-chip.on {
+      border-color: var(--gold-border);
+      background: var(--gold-dim);
+    }
+
+    .tc-label {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 300;
+      color: rgba(245, 240, 232, 0.45);
+      flex: 1;
+      transition: color 0.15s;
+    }
+
+    .toggle-chip.on .tc-label {
+      color: var(--gold);
+    }
+
+    .tc-switch {
+      width: 32px;
+      height: 18px;
+      background: var(--ink4);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 9px;
+      position: relative;
+      transition: background 0.2s, border-color 0.2s;
+      flex-shrink: 0;
+    }
+
+    .toggle-chip.on .tc-switch {
+      background: var(--gold);
+      border-color: var(--gold);
+    }
+
+    .tc-switch::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: rgba(245, 240, 232, 0.3);
+      transition: left 0.2s, background 0.2s;
+    }
+
+    .toggle-chip.on .tc-switch::after {
+      left: 16px;
+      background: var(--ink);
+    }
+
+    /* ══ ACTION BAR ══ */
+    .action-bar {
+      padding: 24px 40px;
+      border-top: 1px solid var(--rule);
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .btn {
+      padding: 0 24px;
+      height: 44px;
+      border-radius: 3px;
+      border: 1px solid;
+      font-family: var(--display);
+      font-size: 16px;
+      letter-spacing: 1.5px;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      white-space: nowrap;
+    }
+
+    .btn:active {
+      transform: scale(0.97);
+    }
+
+    .btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-start {
+      background: var(--paper);
+      color: var(--ink);
+      border-color: var(--paper);
+      flex: 1;
+      justify-content: center;
+    }
+
+    .btn-start:hover:not(:disabled) {
+      background: var(--paper2);
+      border-color: var(--paper2);
+    }
+
+    .btn-cancel {
+      background: var(--red-dim);
+      color: var(--red);
+      border-color: rgba(200, 90, 90, 0.3);
+    }
+
+    .btn-cancel:hover:not(:disabled) {
+      background: rgba(200, 90, 90, 0.2);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: rgba(245, 240, 232, 0.3);
+      border-color: var(--rule);
+    }
+
+    .btn-ghost:hover:not(:disabled) {
+      background: var(--ink2);
+      color: rgba(245, 240, 232, 0.6);
+      border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    /* ══ PROGRESS PANEL ══ */
+    .progress-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(14, 13, 11, 0.96);
+      z-index: 200;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+    }
+
+    .progress-overlay.visible {
+      display: flex;
+    }
+
+    .prog-box {
+      width: 100%;
+      max-width: 680px;
+    }
+
+    .prog-title {
+      font-family: var(--display);
+      font-size: 48px;
+      letter-spacing: 2px;
+      color: var(--paper);
+      margin-bottom: 4px;
+    }
+
+    .prog-title span {
+      color: var(--gold);
+    }
+
+    .prog-subtitle {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 300;
+      color: rgba(245, 240, 232, 0.3);
+      margin-bottom: 40px;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── BIG COUNTER ── */
+    .big-counter {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .big-num {
+      font-family: var(--display);
+      font-size: 96px;
+      line-height: 1;
+      color: var(--paper);
+      transition: color 0.3s;
+      letter-spacing: -2px;
+    }
+
+    .big-sep {
+      font-family: var(--display);
+      font-size: 48px;
+      color: rgba(245, 240, 232, 0.2);
+    }
+
+    .big-total {
+      font-family: var(--display);
+      font-size: 48px;
+      color: rgba(245, 240, 232, 0.35);
+    }
+
+    /* ── PROGRESS TRACK ── */
+    .prog-track {
+      height: 2px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 1px;
+      margin-bottom: 8px;
+      overflow: hidden;
+    }
+
+    .prog-fill {
+      height: 100%;
+      background: var(--gold);
+      border-radius: 1px;
+      width: 0%;
+      transition: width 0.4s ease;
+    }
+
+    .prog-meta-row {
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 300;
+      color: rgba(245, 240, 232, 0.2);
+      margin-bottom: 32px;
+    }
+
+    /* ── PAGE GRID ── */
+    .page-tiles {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(38px, 1fr));
+      gap: 3px;
+      margin-bottom: 28px;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+
+    .page-tiles::-webkit-scrollbar {
+      height: 2px;
+      width: 2px;
+    }
+
+    .page-tiles::-webkit-scrollbar-thumb {
+      background: var(--ink4);
+    }
+
+    .pt {
+      aspect-ratio: 1;
+      border-radius: 2px;
+      background: var(--ink3);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--mono);
+      font-size: 8px;
+      font-weight: 300;
+      color: rgba(245, 240, 232, 0.15);
+      transition: all 0.25s;
+    }
+
+    .pt.loading {
+      border-color: var(--gold-border);
+      color: var(--gold-dim);
+      animation: tileGlow 0.8s infinite alternate;
+    }
+
+    @keyframes tileGlow {
+      from {
+        background: var(--ink3);
+      }
+
+      to {
+        background: var(--gold-dim);
+      }
+    }
+
+    .pt.done {
+      background: rgba(90, 173, 122, 0.12);
+      border-color: rgba(90, 173, 122, 0.3);
+      color: var(--green);
+    }
+
+    .pt.fail {
+      background: var(--red-dim);
+      border-color: rgba(200, 90, 90, 0.25);
+      color: var(--red);
+    }
+
+    /* ── STATUS LINE ── */
+    .status-line-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .status-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(245, 240, 232, 0.15);
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+
+    .status-indicator.active {
+      background: var(--gold);
+      animation: pulse 1s infinite;
+    }
+
+    .status-indicator.done {
+      background: var(--green);
+      animation: none;
+    }
+
+    .status-indicator.err {
+      background: var(--red);
+      animation: none;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1
+      }
+
+      50% {
+        opacity: 0.3
+      }
+    }
+
+    .status-msg {
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 300;
+      color: rgba(245, 240, 232, 0.5);
+      flex: 1;
+    }
+
+    .prog-eta {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: rgba(245, 240, 232, 0.2);
+    }
+
+    /* ── PROGRESS BUTTONS ── */
+    .prog-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    /* ══ HIDDEN ══ */
+    .hidden {
+      display: none !important;
+    }
+
+    /* ══ RESPONSIVE ══ */
+    @media (max-width: 800px) {
+      .page {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: static;
+        height: auto;
+      }
+
+      .sidebar-log {
+        max-height: 140px;
+      }
+
+      .form-area {
+        padding: 24px 20px 0;
+      }
+
+      .action-bar {
+        padding: 16px 20px;
+      }
+
+      .topbar {
+        padding: 16px 20px;
+      }
+
+      .settings-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .big-num {
+        font-size: 64px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="page">
+
+    <!-- ══ SIDEBAR ══ -->
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <div class="logo-mark">FLIP<span>2</span>PDF</div>
+        <div class="logo-sub">Proxy Edition · v4.0</div>
+      </div>
+
+      <div class="sidebar-meta">
+        <div class="meta-label">Session Stats</div>
+        <div class="meta-grid">
+          <div>
+            <div class="meta-val" id="stat-pages">—</div>
+            <div class="meta-unit">pages</div>
+          </div>
+          <div>
+            <div class="meta-val" id="stat-size">—</div>
+            <div class="meta-unit">est. size</div>
+          </div>
+          <div>
+            <div class="meta-val" id="stat-done">0</div>
+            <div class="meta-unit">downloaded</div>
+          </div>
+          <div>
+            <div class="meta-val red" id="stat-fail">0</div>
+            <div class="meta-unit">failed</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-log">
+        <div class="log-header">System Log</div>
+        <div class="log-body" id="log-body">
+          <div class="log-line info">
+            <span class="ts">--:--:--</span>
+            <span class="msg">System ready.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="proxy-badge">
+        <div class="proxy-pill" onclick="toggleProxyConfig()">
+          <div class="proxy-dot" id="proxy-status-dot"></div>
+          <span id="proxy-label">Own proxy active</span>
+        </div>
+        <div class="proxy-url" id="proxy-display">configure proxy url below</div>
+      </div>
+    </aside>
+
+    <!-- ══ MAIN ══ -->
+    <main class="main">
+      <div class="topbar">
+        <div class="topbar-left">
+          <div class="step-pill active" id="step-1">01 · Source</div>
+          <div class="step-pill" id="step-2">02 · Configure</div>
+          <div class="step-pill" id="step-3">03 · Download</div>
+        </div>
+        <div class="topbar-right" id="clock-display">--:--:--</div>
+      </div>
+
+      <div class="form-area">
+
+        <!-- SOURCE -->
+        <div class="section">
+          <div class="section-label">01 · Source URL</div>
+
+          <div class="input-group">
+            <div class="field-label">
+              Flipbook index.html
+              <span class="field-hint">must end with /index.html</span>
+            </div>
+            <div class="url-field-wrap">
+              <div class="url-input-row">
+                <input type="text" id="url-input" placeholder="https://example.com/books/mybook/index.html"
+                  autocomplete="off" spellcheck="false" oninput="onUrlChange()">
+                <button class="icon-btn" onclick="toggleHistory()" title="Show history">↕</button>
+                <button class="icon-btn" onclick="clearUrl()" title="Clear">✕</button>
+              </div>
+              <div class="hist-dropdown" id="hist-dropdown"></div>
+            </div>
+          </div>
+
+          <div class="input-group">
+            <div class="field-label">Output filename</div>
+            <input type="text" id="out-input" value="Flipbook.pdf" placeholder="output.pdf">
+          </div>
+        </div>
+
+        <!-- PROXY CONFIG -->
+        <div class="section">
+          <div class="section-label">02 · Proxy Configuration</div>
+
+          <div class="proxy-row">
+            <div class="input-group" style="margin-bottom:0">
+              <div class="field-label">
+                Your Vercel proxy URL
+                <span class="field-hint">e.g. https://your-app.vercel.app/api/proxy?url=</span>
+              </div>
+              <input type="text" id="proxy-url-input" placeholder="https://your-flip2pdf.vercel.app/api/proxy?url="
+                spellcheck="false" oninput="onProxyChange()">
+            </div>
+            <div class="input-group" style="margin-bottom:0">
+              <div class="field-label">Test</div>
+              <button class="btn btn-ghost" style="height:46px;padding:0 18px;font-size:13px;letter-spacing:0.5px"
+                onclick="testProxy()">Ping Proxy</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- DOWNLOAD SETTINGS -->
+        <div class="section">
+          <div class="section-label">03 · Download Settings</div>
+
+          <div class="settings-grid">
+            <div class="input-group" style="margin-bottom:0">
+              <div class="field-label">Start page</div>
+              <input type="number" id="start-pg" value="1" min="1">
+            </div>
+            <div class="input-group" style="margin-bottom:0">
+              <div class="field-label">
+                End page
+                <span class="field-hint">blank = auto</span>
+              </div>
+              <input type="number" id="end-pg" placeholder="Auto-detect">
+            </div>
+            <div class="input-group" style="margin-bottom:0">
+              <div class="field-label">
+                Concurrency
+                <span class="field-hint">1–20</span>
+              </div>
+              <input type="number" id="threads" value="8" min="1" max="20">
+            </div>
+          </div>
+        </div>
+
+        <!-- OPTIONS -->
+        <div class="section">
+          <div class="section-label">04 · Options</div>
+
+          <div class="toggles-row">
+            <div class="toggle-chip on" id="tc-auto" onclick="toggleChip('tc-auto')">
+              <span class="tc-label">Auto-detect page count</span>
+              <div class="tc-switch"></div>
+            </div>
+            <div class="toggle-chip on" id="tc-retry" onclick="toggleChip('tc-retry')">
+              <span class="tc-label">Retry failed pages (×2)</span>
+              <div class="tc-switch"></div>
+            </div>
+            <div class="toggle-chip on" id="tc-compress" onclick="toggleChip('tc-compress')">
+              <span class="tc-label">Fast PDF compression</span>
+              <div class="tc-switch"></div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /form-area -->
+
+      <div class="action-bar">
+        <button class="btn btn-start" id="start-btn" onclick="startJob()">
+          ↓ &nbsp;DOWNLOAD + COMPILE PDF
+        </button>
+        <button class="btn btn-ghost" onclick="clearHistory()" title="Clear URL history">
+          ⌫ HISTORY
+        </button>
+      </div>
+    </main>
+
+  </div><!-- /page -->
+
+  <!-- ══ PROGRESS OVERLAY ══ -->
+  <div class="progress-overlay" id="progress-overlay">
+    <div class="prog-box">
+
+      <div class="prog-title">COMPIL<span>ING</span></div>
+      <div class="prog-subtitle" id="prog-subtitle">Initialising download sequence...</div>
+
+      <div class="big-counter">
+        <div class="big-num" id="big-done">0</div>
+        <div class="big-sep">/</div>
+        <div class="big-total" id="big-total">0</div>
+      </div>
+
+      <div class="prog-track">
+        <div class="prog-fill" id="prog-fill"></div>
+      </div>
+
+      <div class="prog-meta-row">
+        <span id="pct-label">0%</span>
+        <span id="eta-label"></span>
+      </div>
+
+      <div class="page-tiles" id="page-tiles"></div>
+
+      <div class="status-line-row">
+        <div class="status-indicator active" id="status-dot"></div>
+        <div class="status-msg" id="status-msg">Starting...</div>
+        <div class="prog-eta" id="speed-label"></div>
+      </div>
+
+      <div class="prog-actions">
+        <button class="btn btn-cancel" id="cancel-btn" onclick="cancelJob()">
+          ✕ &nbsp;CANCEL
+        </button>
+        <button class="btn btn-ghost hidden" id="close-btn" onclick="closeProgress()">
+          ← &nbsp;BACK
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // ══════════════════════════════════════════
+    //  STATE
+    // ══════════════════════════════════════════
+    const HIST_KEY = 'f2p_history_v2';
+    const HIST_MAX = 12;
+
+    let cancelFlag = false;
+    let totalPages = 0;
+    let donePgs = 0;
+    let failPgs = 0;
+    let startTime = 0;
+    let chipStates = {};
+
+    // Toggles
+    let chips = { 'tc-auto': true, 'tc-retry': true, 'tc-compress': true };
+
+    // ══════════════════════════════════════════
+    //  CLOCK
+    // ══════════════════════════════════════════
+    function updateClock() {
+      const now = new Date();
+      document.getElementById('clock-display').textContent =
+        now.toTimeString().slice(0, 8);
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // ══════════════════════════════════════════
+    //  LOG
+    // ══════════════════════════════════════════
+    function log(msg, type = '') {
+      const body = document.getElementById('log-body');
+      const now = new Date().toTimeString().slice(0, 8);
+      const line = document.createElement('div');
+      line.className = 'log-line' + (type ? ' ' + type : '');
+      line.innerHTML = `<span class="ts">${now}</span><span class="msg">${msg}</span>`;
+      body.appendChild(line);
+      body.scrollTop = body.scrollHeight;
+    }
+
+    // ══════════════════════════════════════════
+    //  HISTORY
+    // ══════════════════════════════════════════
+    function loadHistory() {
+      try { return JSON.parse(localStorage.getItem(HIST_KEY) || '[]'); } catch { return []; }
+    }
+
+    function saveHistory(url) {
+      if (!url) return;
+      let h = loadHistory().filter(u => u !== url);
+      h.unshift(url);
+      localStorage.setItem(HIST_KEY, JSON.stringify(h.slice(0, HIST_MAX)));
+    }
+
+    function clearHistory() {
+      localStorage.removeItem(HIST_KEY);
+      log('History cleared', 'warn');
+      renderDropdown();
+    }
+
+    function renderDropdown() {
+      const dd = document.getElementById('hist-dropdown');
+      const h = loadHistory();
+      if (!h.length) {
+        dd.innerHTML = '<div class="hist-empty">No history yet.</div>';
+      } else {
+        dd.innerHTML = h.map(u =>
+          `<div class="hist-item" onclick="pickHistory(this)">${u}</div>`
+        ).join('');
+      }
+    }
+
+    function toggleHistory() {
+      const dd = document.getElementById('hist-dropdown');
+      renderDropdown();
+      dd.classList.toggle('open');
+    }
+
+    function pickHistory(el) {
+      document.getElementById('url-input').value = el.textContent;
+      document.getElementById('hist-dropdown').classList.remove('open');
+      onUrlChange();
+    }
+
+    function clearUrl() {
+      document.getElementById('url-input').value = '';
+      document.getElementById('hist-dropdown').classList.remove('open');
+      onUrlChange();
+    }
+
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.url-field-wrap'))
+        document.getElementById('hist-dropdown').classList.remove('open');
+    });
+
+    function onUrlChange() {
+      const url = document.getElementById('url-input').value.trim();
+      if (url && url.includes('index.html')) {
+        setStep(1);
+      }
+    }
+
+    // ══════════════════════════════════════════
+    //  PROXY
+    // ══════════════════════════════════════════
+    function onProxyChange() {
+      const val = document.getElementById('proxy-url-input').value.trim();
+      document.getElementById('proxy-display').textContent = val || 'configure proxy url below';
+      document.getElementById('proxy-label').textContent = val ? 'Custom proxy configured' : 'No proxy set';
+    }
+
+    async function testProxy() {
+      const proxyBase = document.getElementById('proxy-url-input').value.trim();
+      if (!proxyBase) { alert('Enter your proxy URL first.'); return; }
+      log('Testing proxy connection...', 'info');
+      const testUrl = proxyBase + encodeURIComponent('https://httpbin.org/get');
+      try {
+        const r = await fetch(testUrl, { signal: AbortSignal.timeout(8000) });
+        if (r.ok) {
+          log('Proxy test OK — connection successful', 'ok');
+          alert('✓ Proxy is working correctly!');
+        } else {
+          log(`Proxy test failed: HTTP ${r.status}`, 'err');
+          alert(`Proxy returned HTTP ${r.status}. Check your deployment.`);
+        }
+      } catch (e) {
+        log('Proxy test failed: ' + e.message, 'err');
+        alert('Proxy unreachable: ' + e.message);
+      }
+    }
+
+    function getProxyUrl(targetUrl) {
+      const proxyBase = document.getElementById('proxy-url-input').value.trim();
+      if (!proxyBase) throw new Error('No proxy URL configured. Enter your Vercel proxy URL.');
+      return proxyBase + encodeURIComponent(targetUrl);
+    }
+
+    // ══════════════════════════════════════════
+    //  TOGGLES
+    // ══════════════════════════════════════════
+    function toggleChip(id) {
+      chips[id] = !chips[id];
+      document.getElementById(id).classList.toggle('on', chips[id]);
+    }
+
+    function isOn(id) { return chips[id]; }
+
+    // ══════════════════════════════════════════
+    //  STEP INDICATORS
+    // ══════════════════════════════════════════
+    function setStep(n) {
+      for (let i = 1; i <= 3; i++) {
+        const el = document.getElementById(`step-${i}`);
+        el.classList.remove('active', 'done');
+        if (i < n) el.classList.add('done');
+        else if (i === n) el.classList.add('active');
+      }
+    }
+
+    // ══════════════════════════════════════════
+    //  URL PARSING
+    // ══════════════════════════════════════════
+    function buildBaseUrl(indexUrl) {
+      const url = new URL(indexUrl);
+      const parts = url.pathname.replace(/^\/|\/$/g, '').split('/');
+      if (!parts[parts.length - 1].toLowerCase().endsWith('index.html'))
+        throw new Error('URL must end with /index.html — check the address.');
+      const parentPath = parts.slice(0, -1).join('/');
+      const code = parts[parts.length - 2];
+      const base = `${url.protocol}//${url.host}/${parentPath}/files/mobile/{N}.jpg`;
+      return { base, code };
+    }
+
+    // ══════════════════════════════════════════
+    //  DETECT PAGES (binary search)
+    // ══════════════════════════════════════════
+    async function detectTotalPages(base) {
+      setStatus('Detecting total pages via binary search…', 'active');
+      log('Binary search: probing 1→2000', 'info');
+      let low = 1, high = 2000, last = 0;
+
+      while (low <= high) {
+        if (cancelFlag) throw new Error('Cancelled');
+        const mid = Math.floor((low + high) / 2);
+        const url = getProxyUrl(base.replace('{N}', mid));
+        try {
+          const r = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(8000) });
+          if (r.ok) { last = mid; low = mid + 1; }
+          else high = mid - 1;
+        } catch { high = mid - 1; }
+      }
+
+      if (!last) throw new Error('No valid pages found. Check the URL and proxy connection.');
+      log(`Detected ${last} pages`, 'ok');
+      return last;
+    }
+
+    // ══════════════════════════════════════════
+    //  FETCH ONE IMAGE → base64
+    // ══════════════════════════════════════════
+    async function fetchImage(rawUrl, retries = isOn('tc-retry') ? 2 : 0) {
+      for (let i = 0; i <= retries; i++) {
+        try {
+          const r = await fetch(getProxyUrl(rawUrl), { signal: AbortSignal.timeout(15000) });
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const blob = await r.blob();
+          return await blobToB64(blob);
+        } catch (e) {
+          if (i === retries) throw e;
+          await sleep(300 * (i + 1));
+        }
+      }
+    }
+
+    function blobToB64(blob) {
+      return new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result);
+        r.onerror = rej;
+        r.readAsDataURL(blob);
+      });
+    }
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    // ══════════════════════════════════════════
+    //  TILES
+    // ══════════════════════════════════════════
+    function renderTiles(start, end) {
+      const grid = document.getElementById('page-tiles');
+      grid.innerHTML = '';
+      for (let i = start; i <= end; i++) {
+        const d = document.createElement('div');
+        d.className = 'pt';
+        d.id = `pt-${i}`;
+        d.textContent = i;
+        grid.appendChild(d);
+      }
+    }
+
+    function setTile(n, state) {
+      const el = document.getElementById(`pt-${n}`);
+      if (el) el.className = 'pt ' + state;
+    }
+
+    // ══════════════════════════════════════════
+    //  STATS UPDATE
+    // ══════════════════════════════════════════
+    function updateStats() {
+      document.getElementById('stat-done').textContent = donePgs;
+      document.getElementById('stat-fail').textContent = failPgs;
+      document.getElementById('stat-pages').textContent = totalPages || '—';
+      const estMB = totalPages ? (totalPages * 0.18).toFixed(1) : '—';
+      document.getElementById('stat-size').textContent = totalPages ? estMB + ' MB' : '—';
+
+      document.getElementById('big-done').textContent = donePgs;
+      document.getElementById('big-total').textContent = totalPages;
+
+      const pct = totalPages ? Math.round((donePgs / totalPages) * 100) : 0;
+      document.getElementById('prog-fill').style.width = pct + '%';
+      document.getElementById('pct-label').textContent = pct + '%';
+
+      if (donePgs > 0 && startTime) {
+        const elapsed = (Date.now() - startTime) / 1000;
+        const rate = donePgs / elapsed;
+        const rem = Math.max(0, Math.round((totalPages - donePgs) / rate));
+        document.getElementById('eta-label').textContent = rem > 0 ? `~${rem}s remaining` : '';
+        document.getElementById('speed-label').textContent = rate.toFixed(1) + ' pg/s';
+      }
+    }
+
+    // ══════════════════════════════════════════
+    //  STATUS
+    // ══════════════════════════════════════════
+    function setStatus(msg, state = 'active') {
+      document.getElementById('status-msg').textContent = msg;
+      document.getElementById('status-dot').className = 'status-indicator ' + state;
+      document.getElementById('prog-subtitle').textContent = msg;
+    }
+
+    // ══════════════════════════════════════════
+    //  CONCURRENT DOWNLOAD POOL
+    // ══════════════════════════════════════════
+    async function downloadAll(base, start, end, concurrency) {
+      const pages = [];
+      for (let i = start; i <= end; i++) pages.push(i);
+      const results = new Array(pages.length).fill(null);
+      let idx = 0;
+
+      async function worker() {
+        while (idx < pages.length) {
+          if (cancelFlag) return;
+          const cur = idx++;
+          const pg = pages[cur];
+          const rawUrl = base.replace('{N}', pg);
+          setTile(pg, 'loading');
+          try {
+            const b64 = await fetchImage(rawUrl);
+            results[cur] = { pg, b64 };
+            donePgs++;
+            setTile(pg, 'done');
+          } catch (e) {
+            failPgs++;
+            setTile(pg, 'fail');
+            log(`Page ${pg} failed: ${e.message}`, 'err');
+          }
+          updateStats();
+        }
+      }
+
+      const workers = [];
+      for (let i = 0; i < Math.min(concurrency, pages.length); i++) workers.push(worker());
+      await Promise.all(workers);
+      return results.filter(Boolean);
+    }
+
+    // ══════════════════════════════════════════
+    //  BUILD PDF
+    // ══════════════════════════════════════════
+    async function buildPDF(images, filename) {
+      setStatus('Building PDF document…', 'active');
+      log('Assembling pages into PDF…', 'info');
+
+      const { jsPDF } = window.jspdf;
+      if (!images.length) throw new Error('No pages downloaded successfully.');
+
+      const first = await loadImg(images[0].b64);
+      const W = first.naturalWidth, H = first.naturalHeight;
+      const orient = W >= H ? 'l' : 'p';
+      const compress = isOn('tc-compress') ? 'FAST' : 'NONE';
+
+      const pdf = new jsPDF({ orientation: orient, unit: 'px', format: [W, H], compress: true });
+
+      for (let i = 0; i < images.length; i++) {
+        if (cancelFlag) break;
+        if (i > 0) pdf.addPage([W, H], orient);
+        const img = await loadImg(images[i].b64);
+        pdf.addImage(img, 'JPEG', 0, 0, W, H, undefined, compress);
+        if (i % 5 === 0) await sleep(0);
+      }
+
+      const fname = filename.endsWith('.pdf') ? filename : filename + '.pdf';
+      pdf.save(fname);
+      return fname;
+    }
+
+    function loadImg(src) {
+      return new Promise((res, rej) => {
+        const img = new Image();
+        img.onload = () => res(img);
+        img.onerror = rej;
+        img.src = src;
+      });
+    }
+
+    // ══════════════════════════════════════════
+    //  MAIN JOB
+    // ══════════════════════════════════════════
+    async function startJob() {
+      const urlVal = document.getElementById('url-input').value.trim();
+      const outVal = document.getElementById('out-input').value.trim() || 'Flipbook.pdf';
+      const startPg = Math.max(1, parseInt(document.getElementById('start-pg').value) || 1);
+      const endPgVal = document.getElementById('end-pg').value.trim();
+      const concurrency = Math.min(20, Math.max(1, parseInt(document.getElementById('threads').value) || 8));
+
+      if (!urlVal) { alert('Enter a Flipbook URL.'); return; }
+
+      let base, code;
+      try {
+        ({ base, code } = buildBaseUrl(urlVal));
+      } catch (e) { alert(e.message); return; }
+
+      try { getProxyUrl('test'); } catch (e) { alert(e.message); return; }
+
+      // Reset state
+      cancelFlag = false;
+      donePgs = 0;
+      failPgs = 0;
+      totalPages = 0;
+      startTime = 0;
+
+      // Show overlay
+      document.getElementById('progress-overlay').classList.add('visible');
+      document.getElementById('cancel-btn').disabled = false;
+      document.getElementById('cancel-btn').classList.remove('hidden');
+      document.getElementById('close-btn').classList.add('hidden');
+      document.getElementById('page-tiles').innerHTML = '';
+      document.getElementById('eta-label').textContent = '';
+      document.getElementById('speed-label').textContent = '';
+      document.getElementById('big-done').textContent = '0';
+      document.getElementById('big-total').textContent = '0';
+      document.getElementById('prog-fill').style.width = '0%';
+
+      setStep(3);
+      saveHistory(urlVal);
+      log(`Starting: ${urlVal}`, 'ok');
+      log(`Pattern: ${base}`, 'info');
+
+      try {
+        let endPg;
+        if (endPgVal && !isOn('tc-auto')) {
+          endPg = parseInt(endPgVal);
+        } else if (endPgVal) {
+          endPg = parseInt(endPgVal);
+        } else {
+          endPg = await detectTotalPages(base);
+        }
+
+        if (startPg > endPg) throw new Error('Start page exceeds end page.');
+
+        totalPages = endPg - startPg + 1;
+        startTime = Date.now();
+        updateStats();
+        renderTiles(startPg, endPg);
+
+        setStatus(`Downloading ${totalPages} pages at ×${concurrency} concurrency…`, 'active');
+        log(`Downloading pages ${startPg}–${endPg} (${totalPages} total, ${concurrency} concurrent)`, 'info');
+
+        const images = await downloadAll(base, startPg, endPg, concurrency);
+
+        if (cancelFlag) {
+          setStatus('Download cancelled', 'err');
+          log('Cancelled by user', 'warn');
+          return;
+        }
+
+        if (!images.length) throw new Error('All pages failed to download. Check proxy and URL.');
+
+        log(`${images.length}/${totalPages} pages ready. Building PDF…`, 'ok');
+        const saved = await buildPDF(images, outVal);
+
+        setStatus(`Done — ${saved}`, 'done');
+        document.getElementById('prog-subtitle').textContent = `PDF saved: ${saved}`;
+        log(`PDF complete: ${saved}`, 'ok');
+        document.getElementById('big-done').style.color = 'var(--green)';
+
+      } catch (e) {
+        if (!cancelFlag) {
+          setStatus('Error: ' + e.message, 'err');
+          log('Fatal: ' + e.message, 'err');
+        }
+      } finally {
+        document.getElementById('cancel-btn').classList.add('hidden');
+        document.getElementById('close-btn').classList.remove('hidden');
+        document.getElementById('start-btn').disabled = false;
+      }
+    }
+
+    function cancelJob() {
+      cancelFlag = true;
+      setStatus('Cancelling…', 'err');
+      document.getElementById('cancel-btn').disabled = true;
+      log('Cancel requested…', 'warn');
+    }
+
+    function closeProgress() {
+      document.getElementById('progress-overlay').classList.remove('visible');
+      setStep(1);
+      document.getElementById('big-done').style.color = '';
+    }
+
+    // ══════════════════════════════════════════
+    //  INIT
+    // ══════════════════════════════════════════
+    log('Flip2PDF Proxy Edition ready', 'ok');
+    log('Set your Vercel proxy URL before starting', 'warn');
+    setStep(1);
+  </script>
+</body>
+
+</html>

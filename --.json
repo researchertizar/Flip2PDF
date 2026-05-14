@@ -1,0 +1,12 @@
+{
+  "name": "flip2pdf-proxy",
+  "version": "1.0.0",
+  "description": "Flip2PDF serverless proxy for Vercel",
+  "private": true,
+  "scripts": {
+    "dev": "vercel dev"
+  },
+  "devDependencies": {
+    "vercel": "^33.0.0"
+  }
+}
